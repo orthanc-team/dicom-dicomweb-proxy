@@ -1,0 +1,71 @@
+version: "3"
+
+services:
+
+  orthanc-modality:
+    image: orthancteam/orthanc:24.2.0
+    restart: unless-stopped
+    ports: ["8042:8042"]
+    environment:
+      VERBOSE_ENABLED: "true"
+      ORTHANC_JSON: |
+        {
+          "Name": "Orthanc-modality",
+            "RemoteAccessAllowed" : true,
+            "AuthenticationEnabled" : true,
+            "RegisteredUsers" : {
+                "demo": "demo"
+            },
+          "DicomScuTimeout" : 25,
+          "DicomAet": "MODALITY",
+          "DicomModalities": {
+              "proxy": ["PROXY", "orthanc-proxy", 4242]
+          }
+        }
+
+  orthanc-proxy:
+    build: ..
+    restart: unless-stopped
+    ports: ["8043:8042"]
+    environment:
+      VERBOSE_ENABLED: "true"
+      ORTHANC_JSON: |
+        {
+          "Name": "Orthanc-proxy",
+          "RegisteredUsers": {
+              "demo": "demo"
+          },
+          "DicomAet": "PROXY",
+          "DicomModalities": {
+              "modality": ["MODALITY", "orthanc-modality", 4242]
+          },
+          "DicomWeb": {
+            "Servers": {
+              "PROXY": [
+                "http://orthanc-pacs:8042/dicom-web/", "demo", "demo"
+              ]
+            }
+          }
+        }
+
+  orthanc-pacs:
+    image: orthancteam/orthanc:24.2.0
+    restart: unless-stopped
+    ports: ["8044:8042"]
+    environment:
+      VERBOSE_ENABLED: "true"
+      ORTHANC_JSON: |
+        {
+          "Name": "Orthanc-pacs",
+          "RemoteAccessAllowed": true,
+          "AuthenticationEnabled": true,
+          "RegisteredUsers": {
+            "demo": "demo"
+          },
+          "DicomAet": "PACS",
+          "DicomWeb": {
+            "Enable": true
+          }
+        }
+
+
