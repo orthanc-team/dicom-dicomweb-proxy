@@ -40,7 +40,7 @@ class TestProxy(unittest.TestCase):
         self.oc.delete_all_content()
 
         # let's fill the orthanc C (Pacs)
-        self.oc.upload_file("./CT_small.dcm")
+        self.oc.upload_file("../stimuli/CT_small.dcm")
 
         remote_studies = self.oa.modalities.query_studies(
             from_modality="proxy",
@@ -60,7 +60,7 @@ class TestProxy(unittest.TestCase):
         self.oc.delete_all_content()
 
         # let's fill the orthanc C (Pacs)
-        self.oc.upload_file("./CT_small.dcm")
+        self.oc.upload_file("../stimuli/CT_small.dcm")
 
         self.oa.modalities.retrieve_study(
             from_modality="proxy",

@@ -1,0 +1,187 @@
+version: "3"
+
+services:
+
+  orthanc-modality:
+    image: orthancteam/orthanc:24.2.0
+    restart: unless-stopped
+    ports: ["8042:8042"]
+    environment:
+      VERBOSE_ENABLED: "true"
+      ORTHANC_JSON: |
+        {
+          "Name": "Orthanc-modality",
+            "RemoteAccessAllowed" : true,
+            "AuthenticationEnabled" : true,
+            "RegisteredUsers" : {
+                "demo": "demo"
+            },
+          "DicomScuTimeout" : 25,
+          "DicomAet": "MODALITY",
+          "DicomModalities": {
+              "proxy": ["PROXY", "orthanc-proxy", 4242]
+          }
+        }
+
+  orthanc-proxy:
+    build: ..
+    restart: unless-stopped
+    ports: ["8043:8042"]
+    environment:
+      VERBOSE_ENABLED: "true"
+      ORTHANC_JSON: |
+        {
+          "Name": "Orthanc-proxy",
+          "RegisteredUsers": {
+              "demo": "demo"
+          },
+          "DicomAet": "PROXY",
+          "DicomModalities": {
+              "modality": ["MODALITY", "orthanc-modality", 4242]
+          },
+          "DicomWeb": {
+            "Servers": {
+              "PROXY": {
+                "Url" : "http://orthanc:8042/dicom-web/",
+                "HttpHeaders": {
+                  "api-key" : "0123456789"
+                }
+              }
+            }
+          }
+        }
+
+  nginx:
+    image: orthancteam/orthanc-nginx:24.2.0
+    depends_on: [orthanc, orthanc-auth-service, keycloak]
+    restart: unless-stopped
+    ports: ["80:80"]
+    environment:
+      ENABLE_ORTHANC: "true"
+      ENABLE_KEYCLOAK: "true"
+      ENABLE_ORTHANC_TOKEN_SERVICE: "false"
+      ENABLE_HTTPS: "false"
+
+  orthanc:
+    image: orthancteam/orthanc:24.2.0
+    restart: unless-stopped
+    ports: ["8044:8042"]
+    environment:
+      VERBOSE_ENABLED: "true"
+      ORTHANC_JSON: |
+        {
+          "Name": "Orthanc-pacs",
+          "DicomAet": "PACS",
+          "OrthancExplorer2": {
+            "IsDefaultUI": true,
+            "UiOptions": {
+              "EnableShares": true,
+              "DefaultShareDuration": 0,
+              "ShareDurations": [0, 7, 15, 30, 90, 365]
+            },
+            "Tokens" : {
+              "InstantLinksValidity": 3600,
+              "ShareType": "stone-viewer-publication"
+            },
+            "Keycloak" : {
+              "Enable": true,
+              "Url": "http://localhost/keycloak/",
+              "Realm": "orthanc",
+              "ClientId": "orthanc"
+            }
+          },
+          "AuthenticationEnabled": false,     // because it is handled by the authorization plugin
+          "Authorization": {
+            "WebServiceRootUrl": "http://orthanc-auth-service:8000/",
+            "WebServiceUsername": "share-user",
+            "WebServicePassword": "change-me",
+            "StandardConfigurations" : [
+              "stone-webviewer",
+              "orthanc-explorer-2"
+            ],
+            "TokenHttpHeaders" : [ "api-key" ],
+            "CheckedLevel": "studies",
+            "Permissions": [
+              ["post", "^/auth/tokens/decode$", ""],
+              ["post", "^/tools/lookup$", ""], // currently used to authorize downloads in Stone (to map the StudyInstanceUID into an OrthancID.  Not ideal -> we should define a new API that has the resource ID in the path to be able to check it at resource level) but, on another hand, you do not get any Patient information from this route
+              ["post", "^/tools/find$", "all|view"],
+              ["get" , "^/(patients|studies|series|instances)(|/)", "all|view"],
+              ["get" , "^/(patients|studies|series|instances)/([a-f0-9-]+)$", "all|view"],
+              ["get" , "^/(patients|studies|series|instances)/([a-f0-9-]+)/(studies|study|series|instances)$", "all|view"],
+              ["get" , "^/instances/([a-f0-9-]+)/(tags|header)$", "all|view"],
+              ["get" , "^/statistics$", "all|view"],
+              ["get" , "^/changes$", "all|view"],
+              ["put", "^/auth/tokens/(viewer-instant-link|meddream-instant-link)$", "all|view"],
+              ["put", "^/auth/tokens/(download-instant-link)$", "all|download"],
+              ["put", "^/auth/tokens/(stone-viewer-publication|meddream-viewer-publication|osimis-viewer-publication|ohif-viewer-publication)$", "all|share"],
+              ["post", "^/instances$", "all|upload"],
+              ["post" , "^/DICOM_WEB_ROOT/studies$", "all|upload"],
+              ["get" , "^/jobs/([a-f0-9-]+)$", "all|send|modify|anonymize|q-r-remote-modalities"],
+              ["post", "^/(peers|modalities)/(.*)/store$", "all|send"],
+              ["get" , "^/(peers|modalities)$", "all|send|q-r-remote-modalities"],
+              ["post", "^/modalities/(.*)/echo$", "all|send|q-r-remote-modalities"],
+              ["post", "^/modalities/(.*)/query$", "all|q-r-remote-modalities"],
+              ["get", "^/queries/([a-f0-9-]+)/answers$", "all|q-r-remote-modalities"],
+              ["post", "^/modalities/(.*)/move$", "all|q-r-remote-modalities"],
+              ["get" , "^/DICOM_WEB_ROOT/servers$", "all|send|q-r-remote-modalities"],
+              ["get" , "^/DICOM_WEB_ROOT/(servers)/(.*)/stow$", "all|send"],
+              ["get" , "^/DICOM_WEB_ROOT/studies$", "all|view"],
+              ["get" , "^/DICOM_WEB_ROOT/(studies|series|instances)(|/)$", "all|view"],
+              ["get" , "^/DICOM_WEB_ROOT/studies/([.0-9]+)(|/series|/metadata)(|/)$", "all|view"],
+              ["get" , "^/DICOM_WEB_ROOT/studies/([.0-9]+)/series/([.0-9]+)(|/instances|/rendered|/metadata)(|/)$", "all|view"],
+              ["get" , "^/DICOM_WEB_ROOT/studies/([.0-9]+)/series/([.0-9]+)/instances/([.0-9]+)(|/|/frames/.*|/rendered|/metadata|/bulk/.*)(|/)$", "all|view"],
+              ["post", "^/(patients|studies|series|instances)/([a-f0-9-]+)/(modify|merge)(.*)$", "all|modify"],
+              ["post", "^/(patients|studies|series|instances)/([a-f0-9-]+)/anonymize(.*)$", "all|anonymize"],
+              ["get", "^/tools/labels$", "all|view|edit-labels"],
+              ["get" , "^/(patients|studies|series|instances)/([a-f0-9-]+)/labels$", "all|view"],
+              ["put" , "^/(patients|studies|series|instances)/([a-f0-9-]+)/labels/(.*)$", "all|edit-labels"],
+              ["delete" , "^/(patients|studies|series|instances)/([a-f0-9-]+)/labels/(.*)$", "all|edit-labels"],
+              ["delete" , "^/(patients|studies|series|instances)/([a-f0-9-]+)$", "all|delete"],
+              ["post" , "^/tools/bulk-delete$", "all|delete"],
+              ["put", "^/tools/log-level$", "all|settings"],
+              ["get", "^/tools/log-level$", "all|settings"]
+            ]
+          },
+          "DicomWeb": {
+            "Enable": true,
+            "PublicRoot": "/orthanc/dicom-web/"
+          }
+        }
+
+  orthanc-auth-service:
+    image: orthancteam/orthanc-auth-service:24.2.0
+    volumes:
+      - ./permissions.jsonc:/orthanc_auth_service/permissions.json
+    depends_on: [keycloak]
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: "change-me-I-am-a-secret-keyz"
+      ENABLE_KEYCLOAK: "true"
+      ENABLE_KEYCLOAK_API_KEYS: "true"
+      KEYCLOAK_CLIENT_SECRET: "sGaRFvcpy2XfJq5v7Pk3lx4qfDtA68mN"
+      PUBLIC_ORTHANC_ROOT: "http://localhost/orthanc/"
+      PUBLIC_LANDING_ROOT: "http://localhost/orthanc/ui/app/token-landing.html"
+      USERS: |
+        {
+          "share-user": "change-me"
+        }
+
+  keycloak:
+    image: orthancteam/orthanc-keycloak:24.2.0
+    depends_on: [keycloak-db]
+    restart: unless-stopped
+    environment:
+      KEYCLOAK_ADMIN: "admin"
+      KEYCLOAK_ADMIN_PASSWORD: "change-me"
+      KC_DB: "postgres"
+      KC_DB_URL: "jdbc:postgresql://keycloak-db:5432/keycloak"
+      KC_DB_USERNAME: "keycloak"
+      KC_DB_PASSWORD: "keycloak"
+
+  keycloak-db:
+    image: postgres:14
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: "keycloak"
+      POSTGRES_USER: "keycloak"
+      POSTGRES_DB: "keycloak"
