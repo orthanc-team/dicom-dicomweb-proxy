@@ -15,7 +15,7 @@ the modality to dicomweb queries. It also converts the dicomweb replies from the
 
 # Starting the setup
 
-To start the setup, type: `docker-compose up --build`
+To start the setup, type: `docker-compose up -d --build`
 
 # demo
 

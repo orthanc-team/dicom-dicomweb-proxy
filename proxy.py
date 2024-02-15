@@ -140,8 +140,6 @@ def OnFind(answers, query, issuerAet, calledAet):
         answers.FindAddAnswer(orthanc.CreateDicom(
             json.dumps(dicomTagsList), None, orthanc.CreateDicomFlags.NONE))
 
-# todo: test scenario
-
 def WadoRs(request, dicomwebServerAlias = None):
 
     # Let's build the payload
@@ -202,8 +200,6 @@ def GetOrthancAliasFromAET(AET):
     raise Exception('It seems that the modality issuing the original DICOM query is not registered in the Proxy config!')
 
 def OnMove(**request):
-    print("entering in move------------------")
-    time.sleep(18)
     # fetch the resource from the dicomweb server
     if request["SourceAET"] in {None, ''}:
         raise Exception('The DICOM query does not contain a value for the SourceAET, unable to process it!')
