@@ -2,6 +2,9 @@ import json
 import time
 
 import orthanc
+import pprint
+from typing import List
+import dataclasses
 
 '''
 This plugin allows to convert:
@@ -140,49 +143,6 @@ def OnFind(answers, query, issuerAet, calledAet):
         answers.FindAddAnswer(orthanc.CreateDicom(
             json.dumps(dicomTagsList), None, orthanc.CreateDicomFlags.NONE))
 
-def WadoRs(request, dicomwebServerAlias = None):
-
-    # Let's build the payload
-    if request["Level"] in {None, ''}:
-        raise Exception('The DICOM query does not contain a value for the tag Level, unable to process it!')
-    else:
-        level = request["Level"]
-
-    resources = {}
-
-    if request["StudyInstanceUID"] in {None, ''}:
-        raise Exception('The DICOM query does not contain a value for the StudyInstanceUID, unable to process it!')
-    else:
-        resources["Study"] = request["StudyInstanceUID"]
-
-    if level in {"SERIES", "IMAGE"}:
-        if request["SeriesInstanceUID"] in {None, ''}:
-            raise Exception('The DICOM query does not contain a value for the SeriesInstanceUID, unable to process it!')
-        else:
-            resources["Series"] = request["SeriesInstanceUID"]
-        if level == "IMAGE":
-            if request["SOPInstanceUID"] in {None, ''}:
-                raise Exception('The DICOM query does not contain a value for the SOPInstanceUID, unable to process it!')
-            else:
-                resources["Instance"] = request["SOPInstanceUID"]
-
-    payloadDict = {
-        "Resources": [resources]
-    }
-
-    # let's send the query
-    r = orthanc.RestApiPostAfterPlugins('/dicom-web/servers/{0}/retrieve'.format(dicomwebServerAlias), json.dumps(payloadDict))
-
-    if len(json.loads(r)) == 2:
-        if level == "SERIES":
-            orthancId = orthanc.LookupSeries(request["SeriesInstanceUID"])
-        elif level == "IMAGE":
-            orthancId = orthanc.LookupInstance(request["SOPInstanceUID"])
-        else:
-            orthancId = orthanc.LookupStudy(request["StudyInstanceUID"])
-        return orthancId
-    else:
-        raise Exception('The DICOMweb query was not successful!')
 
 def GetOrthancAliasFromAET(AET):
     '''
@@ -190,46 +150,168 @@ def GetOrthancAliasFromAET(AET):
     :param AET: AET to send the resource to
     :return: the Orthanc alias corresponding to the AET
     '''
-    modalities = json.loads(orthanc.RestApiGet('/modalities'))
+    modalities = json.loads(orthanc.RestApiGet('/modalities?expand'))
 
-    for modality in modalities:
-        modalityDetails = json.loads(orthanc.RestApiGet('/modalities/{0}/configuration'.format(modality)))
+    for modality, modalityDetails in modalities.items():
         if modalityDetails["AET"] == AET:
             return modality
 
     raise Exception('It seems that the modality issuing the original DICOM query is not registered in the Proxy config!')
 
-def OnMove(**request):
-    # fetch the resource from the dicomweb server
-    if request["SourceAET"] in {None, ''}:
-        raise Exception('The DICOM query does not contain a value for the SourceAET, unable to process it!')
-    else:
-        dicomwebServerAlias = request["SourceAET"]
-
-    orthancId = WadoRs(request=request, dicomwebServerAlias=dicomwebServerAlias)
-
-    target = None
-    if request["TargetAET"] in {None, ''}:
-        target = request["OriginatorAET"]
-    else:
-        target = request["TargetAET"]
-
-    modalityAlias = GetOrthancAliasFromAET(target)
-
-    # C-store from proxy to issuer
-    orthanc.RestApiPost('/modalities/{0}/store'.format(modalityAlias), orthancId)
 
 
-    # Delete resource from the proxy
-    if request["Level"] == "PATIENT":
-        raise Exception('Patient level not supported by the proxy!')
-    elif request["Level"] == "STUDY":
-        orthanc.RestApiDelete('/studies/{0}'.format(orthancId))
-    elif request["Level"] == "SERIES":
-        orthanc.RestApiDelete('/series/{0}'.format(orthancId))
-    elif request["Level"] == "IMAGE":
-        orthanc.RestApiDelete('/instances/{0}'.format(orthancId))
 
+@dataclasses.dataclass
+class RemoteInstance:
+    study_instance_uid: str
+    series_instance_uid: str
+    sop_instance_uid: str
+
+class MoveDriver:
+
+    def __init__(self, request) -> None:
+        self.request = request
+        self.remote_instances = []
+        self.local_instances_ids = []
+        self.instance_counter = 0
+
+        if request["SourceAET"] in {None, ''}:
+            raise Exception('The DICOM query does not contain a value for the SourceAET, unable to process it!')
+
+        if request["Level"] in {None, ''}:
+            raise Exception('The DICOM query does not contain a value for the tag Level, unable to process it!')
+
+        self.level = request["Level"]
+        self.remote_server = request["SourceAET"]
+
+        if request["StudyInstanceUID"] in {None, ''}:
+            raise Exception('The DICOM query does not contain a value for the StudyInstanceUID, unable to process it!')
+        else:
+            self.study_instance_uid = request["StudyInstanceUID"]
+
+        if self.level in {"SERIES", "IMAGE"}:
+            if request["SeriesInstanceUID"] in {None, ''}:
+                raise Exception('The DICOM query does not contain a value for the SeriesInstanceUID, unable to process it!')
+            else:
+                self.series_instance_uid = request["SeriesInstanceUID"]
+
+            if self.level == "IMAGE":
+
+                if request["SOPInstanceUID"] in {None, ''}:
+                    raise Exception('The DICOM query does not contain a value for the SOPInstanceUID, unable to process it!')
+                else:
+                    sop_instance_uid = request["SOPInstanceUID"]
+                    self.remote_instances = [
+                        RemoteInstance(study_instance_uid=self.study_instance_uid,
+                                    series_instance_uid=self.series_instance_uid,
+                                    sop_instance_uid=sop_instance_uid)
+                    ]
+
+        self.target_aet = None
+        if request["TargetAET"] in {None, ''}:
+            self.target_aet = request["OriginatorAET"]
+        else:
+            self.target_aet = request["TargetAET"]
+
+        self.target_modality_alias = GetOrthancAliasFromAET(self.target_aet)
+
+
+    # get the url where each instance can be downloaded
+    def get_instances_list(self):
+        request = self.request
+
+        # Let's build the payload
+        
+        if self.level == "STUDY":
+            url = f"studies/{self.study_instance_uid}/instances"
+        elif self.level == "SERIES":
+            url = f"studies/{self.study_instance_uid}/series/{self.series_instance_uid}/instances"
+
+        payloadDict = {
+            "Uri": url,
+            "HttpHeaders": {
+                "Accept": "application/json"
+            }
+        }
+
+        # let's send the query and return the result
+        dw_instances = json.loads(orthanc.RestApiPostAfterPlugins('/dicom-web/servers/{0}/get'.format(self.remote_server), json.dumps(payloadDict)))
+        pprint.pprint(dw_instances)
+        self.remote_instances = []
+        for dw_instance in dw_instances:
+            if '00080018' in dw_instance and '0020000E' in dw_instance and '0020000D' in dw_instance:
+                self.remote_instances.append(RemoteInstance(study_instance_uid=dw_instance['0020000D']['Value'][0],
+                                                            series_instance_uid=dw_instance['0020000E']['Value'][0],
+                                                            sop_instance_uid=dw_instance['00080018']['Value'][0]))
+
+    def retrieve_next_instance(self) -> str:
+        # retrieve one instance from the DICOMWeb server
+        if self.instance_counter > len(self.remote_instances):
+            raise Exception('Trying to retrieve an instance that has not been listed!')
+
+        remote_instance = self.remote_instances[self.instance_counter]
+        self.instance_counter += 1
+
+        resources = {}
+        resources["Study"] = remote_instance.study_instance_uid
+        resources["Series"] = remote_instance.series_instance_uid
+        resources["Instance"] = remote_instance.sop_instance_uid
+
+        payloadDict = {
+            "Resources": [resources]
+        }
+
+        r = orthanc.RestApiPostAfterPlugins('/dicom-web/servers/{0}/retrieve'.format(self.remote_server), json.dumps(payloadDict))
+
+        orthanc_id = orthanc.LookupInstance(remote_instance.sop_instance_uid)
+        self.local_instances_ids.append(orthanc_id)
+        
+        return orthanc_id
+        
+    def forward_instance(self, orthanc_id: str):
+        # C-store from proxy to issuer
+        orthanc.RestApiPost('/modalities/{0}/store'.format(self.target_modality_alias), json.dumps({
+            "Resources": [orthanc_id]
+        }))
+
+    def cleanup(self):
+        orthanc.RestApiPost('/tools/bulk-delete', json.dumps({
+            "Resources": self.local_instances_ids
+        }))
+
+
+def CreateMoveCallback(**request):
+    # simply create the move driver object now and return it to Orthanc
+    orthanc.LogInfo("CreateMoveCallback")
+    # pprint.pprint(request)
+
+    driver = MoveDriver(request=request)
+
+    return driver
+
+def GetMoveSizeCallback(driver: MoveDriver):
+    # query the remote server to list and count the instances to retrieve
+    orthanc.LogInfo("GetMoveSizeCallback")
+
+    driver.get_instances_list()
+
+    return len(driver.remote_instances)
+
+def ApplyMoveCallback(driver: MoveDriver):
+    # move one instance at a time from the DICOMWeb server to the target via the proxy
+    orthanc.LogInfo("ApplyMoveCallback")
+
+    instance_id = driver.retrieve_next_instance()
+    driver.forward_instance(instance_id)
+
+    return 0 # 0 is success, you should raise an exception in case of errors
+
+def FreeMoveCallback(driver):
+    # free the resources that have been allocated by the move driver
+    orthanc.LogInfo("FreeMoveCallback")
+
+    driver.cleanup()
+    
 
 orthanc.RegisterFindCallback(OnFind)
-orthanc.RegisterMoveCallback(OnMove)
+orthanc.RegisterMoveCallback2(CreateMoveCallback, GetMoveSizeCallback, ApplyMoveCallback, FreeMoveCallback)

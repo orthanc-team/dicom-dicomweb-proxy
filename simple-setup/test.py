@@ -31,7 +31,8 @@ class TestProxy(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        subprocess.run(["docker", "compose", "down", "-v"], cwd=here)
+        pass
+        # subprocess.run(["docker", "compose", "down", "-v"], cwd=here)
 
 
     def test_c_find(self):
@@ -60,17 +61,18 @@ class TestProxy(unittest.TestCase):
         self.oc.delete_all_content()
 
         # let's fill the orthanc C (Pacs)
-        self.oc.upload_file("../stimuli/CT_small.dcm")
+        self.oc.upload_folder(here / "../stimuli/Brainix")
 
         self.oa.modalities.retrieve_study(
             from_modality="proxy",
-            dicom_id="1.3.6.1.4.1.5962.1.2.1.20040119072730.12322"
+            dicom_id="2.16.840.1.113669.632.20.1211.10000357775"
         )
 
         self.assertEqual(1, len(self.oa.studies.get_all_ids()))
+        self.assertEqual(3, len(self.oa.instances.get_all_ids()))
 
         # let's verify that the proxy is cleared after the transfer
-        self.assertEqual(0, len(self.ob.studies.get_all_ids()))
+        self.assertEqual(0, len(self.ob.instances.get_all_ids()))
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')

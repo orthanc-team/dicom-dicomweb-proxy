@@ -1,4 +1,4 @@
-FROM orthancteam/orthanc:24.2.0
+FROM orthancteam/orthanc-pre-release:python-cmove2-unstable
 
 COPY proxy.py /scripts/
 

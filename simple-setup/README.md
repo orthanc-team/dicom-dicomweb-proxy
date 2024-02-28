@@ -20,7 +20,9 @@ To start the setup, type: `docker-compose up -d --build`
 # demo
 
 - login/pwd = demo/demo
-- Connect to the orthanc simulating the dicomweb pacs on [http://localhost:8044](http://localhost:8044).
+- Connect to the orthanc simulating the dicomweb pacs on [http://localhost:8044/ui/app/](http://localhost:8044/ui/app/) (demo/demo).
 - Upload an image to this instance of Orthanc.
-- Open the orthanc simulating the dicom modality on [http://localhost:8042](http://localhost:8042).
-- Query the dicomweb node to get the study you uploaded and try to get it 
+- Open the orthanc simulating the dicom modality on [http://localhost:8042/ui/app/](http://localhost:8042/ui/app/) (demo/demo).
+- In OE2, open the `DICOM Modalities` menu and select `proxy`.
+- Click the search button, you should see the content of the `orthanc-pacs` that has been retrieved via the Proxy (C-Find to QIDO-RS conversion).
+- If you click on `Retrieve`, the study shall be retrieved via the proxy (C-Move to WADO-RS conversion)
