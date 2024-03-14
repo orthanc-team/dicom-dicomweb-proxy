@@ -169,11 +169,15 @@ class RemoteInstance:
 
 class MoveDriver:
 
+    def __del__(self):
+        print("+++++++++++MoveDriver being deallocated")
+
     def __init__(self, request) -> None:
         self.request = request
         self.remote_instances = []
         self.local_instances_ids = []
         self.instance_counter = 0
+        self.memory = [0] * 10000000
 
         if request["SourceAET"] in {None, ''}:
             raise Exception('The DICOM query does not contain a value for the SourceAET, unable to process it!')
@@ -223,9 +227,9 @@ class MoveDriver:
         # Let's build the payload
         
         if self.level == "STUDY":
-            url = f"studies/{self.study_instance_uid}/instances"
+            url = f"studies/{self.study_instance_uid}/metadata"
         elif self.level == "SERIES":
-            url = f"studies/{self.study_instance_uid}/series/{self.series_instance_uid}/instances"
+            url = f"studies/{self.study_instance_uid}/series/{self.series_instance_uid}/metadata"
 
         payloadDict = {
             "Uri": url,
@@ -236,7 +240,7 @@ class MoveDriver:
 
         # let's send the query and return the result
         dw_instances = json.loads(orthanc.RestApiPostAfterPlugins('/dicom-web/servers/{0}/get'.format(self.remote_server), json.dumps(payloadDict)))
-        pprint.pprint(dw_instances)
+        # pprint.pprint(dw_instances)
         self.remote_instances = []
         for dw_instance in dw_instances:
             if '00080018' in dw_instance and '0020000E' in dw_instance and '0020000D' in dw_instance:
