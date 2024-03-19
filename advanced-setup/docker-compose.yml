@@ -63,7 +63,8 @@ services:
       ENABLE_HTTPS: "false"
 
   orthanc:
-    image: orthancteam/orthanc:24.2.0
+    image: orthancteam/orthanc-pre-release:master-unstable
+    # TODO: replace with official release as soon as python plugin is released
     restart: unless-stopped
     ports: ["8044:8042"]
     environment:
@@ -99,7 +100,7 @@ services:
               "stone-webviewer",
               "orthanc-explorer-2"
             ],
-            "TokenHttpHeaders" : [ "api-key" ],
+            "TokenHttpHeaders": [ "api-key" ],
             "CheckedLevel": "studies"
           },
           "DicomWeb": {
@@ -118,7 +119,7 @@ services:
       SECRET_KEY: "change-me-I-am-a-secret-keyz"
       ENABLE_KEYCLOAK: "true"
       ENABLE_KEYCLOAK_API_KEYS: "true"
-      KEYCLOAK_CLIENT_SECRET: "sGaRFvcpy2XfJq5v7Pk3lx4qfDtA68mN"
+      KEYCLOAK_CLIENT_SECRET: "9J0G5PwhRkgalak7OMeNL5ZIr3vijhtc"
       PUBLIC_ORTHANC_ROOT: "http://localhost/orthanc/"
       PUBLIC_LANDING_ROOT: "http://localhost/orthanc/ui/app/token-landing.html"
       USERS: |

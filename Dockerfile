@@ -1,4 +1,5 @@
 FROM orthancteam/orthanc-pre-release:python-cmove2-unstable
+#TODO: replace with right Orthanc
 
 COPY proxy.py /scripts/
 
