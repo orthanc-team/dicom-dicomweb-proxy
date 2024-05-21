@@ -99,7 +99,7 @@ services:
               "stone-webviewer",
               "orthanc-explorer-2"
             ],
-            "TokenHttpHeaders" : [ "api-key" ],
+            "TokenHttpHeaders": [ "api-key" ],
             "CheckedLevel": "studies"
           },
           "DicomWeb": {
