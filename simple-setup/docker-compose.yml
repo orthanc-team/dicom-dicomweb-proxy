@@ -49,7 +49,7 @@ services:
         }
 
   orthanc-pacs:
-    image: orthancteam/orthanc:24.5.1
+    image: orthancteam/orthanc:24.6.1
     restart: unless-stopped
     ports: ["8044:8042"]
     environment:

@@ -127,7 +127,9 @@ def BuildTagsListFromDicomWebAnswer(answer):
                 if "Alphabetic" in value:
                     dicomDict[tag] = value["Alphabetic"]
                 else:
-                    raise Exception('The tag {0} does contain this dict: {1}, but this dict is not expected in the proxy plugin!'.format(tag, value))
+                    #raise Exception('The tag {0} does contain this dict: {1}, but this dict is not expected in the proxy plugin!'.format(tag, value))
+                    dicomDict.update(BuildTagsListFromDicomWebAnswer(value))
+
             # most of the tags simply contain a value:
             else:
                 dicomDict[tag] = str(value)
