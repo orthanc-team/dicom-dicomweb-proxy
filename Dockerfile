@@ -1,4 +1,4 @@
-FROM orthancteam/orthanc:24.7.3
+FROM orthancteam/orthanc:24.10.1
 
 COPY proxy.py /scripts/
 

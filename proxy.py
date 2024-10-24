@@ -2,9 +2,11 @@ import json
 import time
 
 import orthanc
-import pprint
+import pprint, os
 from typing import List
 import dataclasses
+
+verbose_enabled = False
 
 '''
 This plugin allows to convert:
@@ -83,6 +85,10 @@ def QidoRs(query, dicomwebServerAlias = None):
             tag = query.GetFindQueryTagName(i)
             arguments[tag] = query.GetFindQueryValue(i)
 
+    if verbose_enabled:
+        pprint.pprint("original C-find query:")
+        pprint.pprint(arguments)
+
     payloadDict = {
         "Uri": level,
         "HttpHeaders": {
@@ -137,6 +143,7 @@ def BuildTagsListFromDicomWebAnswer(answer):
     return dicomDict
 
 def OnFind(answers, query, issuerAet, calledAet):
+
     dicomWebAnswer = QidoRs(query=query, dicomwebServerAlias=calledAet)
 
     for answer in dicomWebAnswer:
@@ -321,3 +328,6 @@ def FreeMoveCallback(driver):
 
 orthanc.RegisterFindCallback(OnFind)
 orthanc.RegisterMoveCallback2(CreateMoveCallback, GetMoveSizeCallback, ApplyMoveCallback, FreeMoveCallback)
+
+if os.environ.get('VERBOSE_ENABLED') in ["true", "True", True]:
+    verbose_enabled = True
