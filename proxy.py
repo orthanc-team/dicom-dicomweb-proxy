@@ -188,6 +188,10 @@ class MoveDriver:
         self.instance_counter = 0
         self.memory = [0] * 10000000
 
+        if verbose_enabled:
+            pprint.pprint("original C-move query:")
+            pprint.pprint(request)
+
         if request["SourceAET"] in {None, ''}:
             raise Exception('The DICOM query does not contain a value for the SourceAET, unable to process it!')
 

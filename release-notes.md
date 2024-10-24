@@ -2,6 +2,10 @@ Warning: version number should fit with Orthanc docker image version number!
 (so a new version of the forwarder with the same version of Orthanc should be tagged 22.10.1.x)
 
 
+v 24.10.1.2
+=========
+- added original c-move query in the logs (verbose mode)
+
 v 24.10.1.1
 =========
 - upgraded Orthanc to 24.10.1
