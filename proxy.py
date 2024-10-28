@@ -201,8 +201,9 @@ class MoveDriver:
         if request["StudyInstanceUID"] in {None, ''}:
             raise Exception('The DICOM query does not contain a value for the StudyInstanceUID, unable to process it!')
         else:
+            # A C-move query can contain 2 (or more) values in the 'StudyInstanceUID' tag, separated by '\'
+            # So, we have to handle all of them separately:
             self.study_instance_uid_list = request["StudyInstanceUID"].split("\\")
-            #self.study_instance_uid = request["StudyInstanceUID"]
 
         if self.level in {"SERIES", "IMAGE"}:
             if request["SeriesInstanceUID"] in {None, ''}:

@@ -1,6 +1,10 @@
 Warning: version number should fit with Orthanc docker image version number!
 (so a new version of the forwarder with the same version of Orthanc should be tagged 22.10.1.x)
 
+v 24.10.3.1
+=========
+- handle OR operator ('\') in StudyInstanceUID DICOM tag for c-move
+- upgraded Orthanc to 24.10.3
 
 v 24.10.1.2
 =========
