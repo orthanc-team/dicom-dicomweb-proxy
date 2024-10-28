@@ -178,9 +178,6 @@ class RemoteInstance:
 
 class MoveDriver:
 
-    def __del__(self):
-        print("+++++++++++MoveDriver being deallocated")
-
     def __init__(self, request) -> None:
         self.request = request
         self.remote_instances = []
@@ -204,7 +201,8 @@ class MoveDriver:
         if request["StudyInstanceUID"] in {None, ''}:
             raise Exception('The DICOM query does not contain a value for the StudyInstanceUID, unable to process it!')
         else:
-            self.study_instance_uid = request["StudyInstanceUID"]
+            self.study_instance_uid_list = request["StudyInstanceUID"].split("\\")
+            #self.study_instance_uid = request["StudyInstanceUID"]
 
         if self.level in {"SERIES", "IMAGE"}:
             if request["SeriesInstanceUID"] in {None, ''}:
@@ -219,7 +217,7 @@ class MoveDriver:
                 else:
                     sop_instance_uid = request["SOPInstanceUID"]
                     self.remote_instances = [
-                        RemoteInstance(study_instance_uid=self.study_instance_uid,
+                        RemoteInstance(study_instance_uid=self.study_instance_uid_list[0],
                                     series_instance_uid=self.series_instance_uid,
                                     sop_instance_uid=sop_instance_uid)
                     ]
@@ -237,29 +235,31 @@ class MoveDriver:
     def get_instances_list(self):
         request = self.request
 
-        # Let's build the payload
-        
-        if self.level == "STUDY":
-            url = f"studies/{self.study_instance_uid}/metadata"
-        elif self.level == "SERIES":
-            url = f"studies/{self.study_instance_uid}/series/{self.series_instance_uid}/metadata"
-
-        payloadDict = {
-            "Uri": url,
-            "HttpHeaders": {
-                "Accept": "application/json"
-            }
-        }
-
-        # let's send the query and return the result
-        dw_instances = json.loads(orthanc.RestApiPostAfterPlugins('/dicom-web/servers/{0}/get'.format(self.remote_server), json.dumps(payloadDict)))
-        # pprint.pprint(dw_instances)
         self.remote_instances = []
-        for dw_instance in dw_instances:
-            if '00080018' in dw_instance and '0020000E' in dw_instance and '0020000D' in dw_instance:
-                self.remote_instances.append(RemoteInstance(study_instance_uid=dw_instance['0020000D']['Value'][0],
-                                                            series_instance_uid=dw_instance['0020000E']['Value'][0],
-                                                            sop_instance_uid=dw_instance['00080018']['Value'][0]))
+        for study_instance_uid in self.study_instance_uid_list:
+
+            # Let's build the payload
+
+            if self.level == "STUDY":
+                url = f"studies/{study_instance_uid}/metadata"
+            elif self.level == "SERIES":
+                url = f"studies/{study_instance_uid}/series/{self.series_instance_uid}/metadata"
+
+            payloadDict = {
+                "Uri": url,
+                "HttpHeaders": {
+                    "Accept": "application/json"
+                }
+            }
+
+            # let's send the query and return the result
+            dw_instances = json.loads(orthanc.RestApiPostAfterPlugins('/dicom-web/servers/{0}/get'.format(self.remote_server), json.dumps(payloadDict)))
+            # pprint.pprint(dw_instances)
+            for dw_instance in dw_instances:
+                if '00080018' in dw_instance and '0020000E' in dw_instance and '0020000D' in dw_instance:
+                    self.remote_instances.append(RemoteInstance(study_instance_uid=dw_instance['0020000D']['Value'][0],
+                                                                series_instance_uid=dw_instance['0020000E']['Value'][0],
+                                                                sop_instance_uid=dw_instance['00080018']['Value'][0]))
 
     def retrieve_next_instance(self) -> str:
         # retrieve one instance from the DICOMWeb server
