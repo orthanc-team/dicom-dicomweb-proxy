@@ -74,6 +74,25 @@ class TestProxy(unittest.TestCase):
         # let's verify that the proxy is cleared after the transfer
         self.assertEqual(0, len(self.ob.instances.get_all_ids()))
 
+    def test_c_move_2_studies(self):
+        self.oa.delete_all_content()
+        self.ob.delete_all_content()
+        self.oc.delete_all_content()
+
+        # let's fill the orthanc C (Pacs)
+        self.oc.upload_folder(here / "../stimuli")
+
+        self.oa.modalities.retrieve_study(
+            from_modality="proxy",
+            dicom_id="2.16.840.1.113669.632.20.1211.10000357775\\1.2.276.0.7230010.3.1.2.1717646434.1.1707928889.331715"
+        )
+
+        self.assertEqual(2, len(self.oa.studies.get_all_ids()))
+        self.assertEqual(4, len(self.oa.instances.get_all_ids()))
+
+        # let's verify that the proxy is cleared after the transfer
+        self.assertEqual(0, len(self.ob.instances.get_all_ids()))
+
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     unittest.main()
